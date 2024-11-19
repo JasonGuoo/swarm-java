@@ -1,3 +1,5 @@
-
 /.idea
 /target
+# Ignore actual .env files
+.env
+src/test/resources/.env

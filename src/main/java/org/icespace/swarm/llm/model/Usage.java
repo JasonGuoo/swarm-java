@@ -3,9 +3,15 @@ package org.icespace.swarm.llm.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Usage {
     @JsonProperty("prompt_tokens")
@@ -17,6 +23,5 @@ public class Usage {
     @JsonProperty("total_tokens")
     private Integer totalTokens;
 
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private JsonNode rawJson;
 }
