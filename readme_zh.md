@@ -7,105 +7,52 @@ SwarmJava 是一个Java库，用于构建基于LLM的应用程序，使多个AI�
 ## 核心概念
 
 ### 1. 智能体（Agents）和系统提示（System Prompts）
-智能体是Swarm的基本构建块。每个智能体都继承基础`Agent`类并定义其行为：
-```java
-public class ResearchAgent extends Agent {
-    public ResearchAgent() {
-        super("gpt-4", "Research paper analysis specialist");
-    }
-
-    @Override
-    public String getSystemPrompt(Map<String, Object> context) {
-        return "You are a research assistant specialized in scientific paper analysis...";
-    }
-}
-```
+智能体是Swarm的基本构建块。每个智能体都有特定的角色和专长，由其系统提示和行为定义。例如，研究智能体专门分析科学论文，而统计智能体则专注于验证统计方法。
 
 ### 2. 函数调用（Function Calling）
-使用注解定义LLM可以调用的函数。这些函数会自动暴露给LLM，并进行参数验证：
-```java
-@FunctionSpec(
-    description = "Analyze a research paper and extract key findings"
-)
-public PaperAnalysis analyzePaper(
-    @Parameter(description = "URL or DOI of the research paper") 
-    String paperIdentifier,
-    
-    @Parameter(
-        description = "Specific aspects to focus on (e.g., methodology, results, conclusions)", 
-        defaultValue = "all"
-    ) 
-    String aspects
-) {
-    // 实现代码
-}
-```
+SwarmJava使用强大的注解系统将Java方法作为可调用函数暴露给LLM。这个系统实现了LLM和代码之间的无缝通信：
+
+1. **函数发现**：框架自动扫描带有`@FunctionSpec`注解的方法，告诉LLM有哪些函数可用以及它们的功能。
+
+2. **参数映射**：方法参数上的`@Parameter`注解为LLM提供：
+   - 每个参数功能的清晰描述
+   - 参数类型（从Java类型自动推断）
+   - 适用时的默认值
+
+3. **动态调用**：当LLM决定使用一个函数时：
+   - 它根据描述选择适当的函数
+   - 以正确的格式提供所需参数
+   - 框架自动验证和转换参数
+   - 你的Java方法被调用并接收正确的参数
+
+这种基于注解的方法意味着你不需要编写任何样板代码来集成LLM - 只需注解你的方法，框架就会处理其余部分。
 
 ### 3. 动态交接（Dynamic Hand-offs）
-Swarm最强大的特性是其能够根据任务需求在专门的智能体之间动态切换。这创建了一个灵活的、自组织的系统，其中智能体可以将任务委托给具有特定专长的其他智能体：
+Swarm的关键特性是其动态智能体协作系统，使智能体能够无缝协作。让我们看一个客服系统的例子：
 
-```java
-@Agent(
-    systemPrompt = "You are a research coordinator that delegates tasks to specialized agents..."
-)
-public class ResearchCoordinatorAgent {
-    
-    @FunctionSpec(
-        description = "Analyze a research paper and coordinate with specialized agents as needed"
-    )
-    public Agent analyzePaper(
-        @Parameter(description = "Paper analysis results") 
-        PaperAnalysis analysis
-    ) {
-        if (analysis.requiresStatisticalReview()) {
-            return new StatisticsAgent(); // 交接给统计专家
-        } else if (analysis.containsMLComponents()) {
-            return new MLReviewAgent();   // 交接给机器学习专家
-        } else if (analysis.needsPeerReview()) {
-            return new PeerReviewAgent(); // 交接给同行评审专家
-        }
-        return null; // 继续使用当前智能体
-    }
-}
+1. **初始接触**：客服经理智能体接收并分析客户请求
+2. **智能路由**：根据请求类型，经理自动将任务委派给专门的智能体：
+   - 销售智能体：处理产品咨询、价格问题和购买协助
+   - 退款智能体：处理退货请求和管理退款程序
+   - 经理智能体：处理升级和需要监督的复杂情况
 
-@Agent(
-    systemPrompt = "You are a statistics expert that reviews research methodology..."
-)
-public class StatisticsAgent {
-    @FunctionSpec(
-        description = "Review statistical methods and validate conclusions"
-    )
-    public StatisticalReview reviewStatistics(
-        @Parameter(description = "Statistical methods used in the paper") 
-        String methods,
-        @Parameter(description = "Data analysis results") 
-        String results
-    ) {
-        // 执行统计审查
-    }
-}
-```
+例如，当收到客户询问时：
+1. 经理智能体分析请求："我想退回一个有缺陷的产品"
+2. 识别这是退款案例，将其交给退款智能体
+3. 如果退款金额超过某些限制，退款智能体可能会升级回经理智能体
+4. 在处理过程中如有产品相关问题，可能会咨询销售智能体
 
-在这个例子中：
-1. `ResearchCoordinatorAgent` 开始分析一篇论文
-2. 根据内容，它可以动态地交接给专门的智能体：
-   - `StatisticsAgent` 负责统计分析
-   - `MLReviewAgent` 负责机器学习组件
-   - `PeerReviewAgent` 负责一般同行评审
-3. 每个专门的智能体可以根据需要进一步委托给其他智能体
-4. LLM自动管理智能体之间的对话流程和上下文
-
-这创建了一个动态工作流程，其中：
+这创建了一个动态的、自组织的系统，其中：
 - 智能体自主决定何时委托
-- 专业知识分布在专门的智能体中
-- 复杂任务自然分解
-- 在交接过程中保持上下文
+- 每个智能体专注于其专业领域
+- 复杂请求得到高效处理
+- 在整个对话过程中保持上下文
 
 Swarm的强大之处：
-- **自主决策**: 智能体可以独立决定何时使用工具、调用函数或委托任务
-- **上下文感知**: 内置的上下文管理确保智能体维护状态并理解其环境
-- **灵活集成**: 基于HTTP的简单实现确保与不同LLM提供商的兼容性
-- **动态工作流**: 由LLM驱动的智能体转换创建自适应任务处理
+- **自主决策**：智能体独立决定何时使用工具、调用函数或委托任务
+- **上下文感知**：内置的上下文管理确保智能体维护状态并理解其环境
+- **灵活集成**：基于HTTP的简单实现确保与不同LLM提供商的兼容性
+- **动态工作流**：由LLM驱动的智能体转换创建自适应任务处理
 
 🚧 **积极开发中** 🚧
 该项目目前处于早期开发阶段。API和功能可能会发生变化，许多组件仍在实现中。欢迎关注仓库以获取最新进展。
