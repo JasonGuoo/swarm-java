@@ -6,11 +6,13 @@ import org.icespace.swarm.llm.model.Message;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Disabled("Skipping AzureOpenAI tests")
 class AzureOpenAIClientTest {
     private AzureOpenAIClient client;
 

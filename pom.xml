@@ -70,6 +70,12 @@
             <scope>provided</scope>
         </dependency>
 
+        <dependency>
+            <groupId>io.github.cdimascio</groupId>
+            <artifactId>dotenv-java</artifactId>
+            <version>2.3.2</version>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -107,7 +113,9 @@
                 <configuration>
                     <source>${java.version}</source>
                     <target>${java.version}</target>
-                    <release>11</release>
+                    <compilerArgs>
+                        <arg>-parameters</arg>
+                    </compilerArgs>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>

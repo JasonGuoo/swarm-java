@@ -1,24 +1,55 @@
 package org.icespace.swarm.llm;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import org.icespace.swarm.llm.model.ChatRequest;
+import org.icespace.swarm.llm.model.ChatResponse;
+import org.icespace.swarm.llm.model.Choice;
+import org.icespace.swarm.llm.model.Message;
+import org.icespace.swarm.llm.model.Usage;
+
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Instant;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Collections;
-import java.time.Instant;
-
-import com.fasterxml.jackson.databind.JsonNode;
-
-import org.icespace.swarm.llm.model.ChatRequest;
-import org.icespace.swarm.llm.model.ChatResponse;
-import org.icespace.swarm.llm.model.Message;
-import org.icespace.swarm.llm.model.Choice;
-import org.icespace.swarm.llm.model.Usage;
+import java.util.stream.Stream;
 
 /**
  * Ollama API client implementation.
- * Extends OpenAI client since Ollama follows a similar API format.
+ * Provides access to locally hosted LLM models through Ollama:
+ * - Llama 2
+ * - Mistral
+ * - Code Llama
+ * - Custom models
+ *
+ * Features:
+ * - Local model hosting
+ * - No API key required
+ * - Stream mode support
+ * - Custom model parameters
+ * - OpenAI-compatible format
+ *
+ * Configuration:
+ * - Base URL (localhost by default)
+ * - Model selection
+ * - Custom model parameters
+ *
+ * Example usage:
+ * <pre>{@code
+ * OllamaClient client = new OllamaClient(
+ *     "http://localhost:11434",
+ *     "llama2"
+ * );
+ *
+ * ChatResponse response = client.chat(ChatRequest.builder()
+ *     .messages(messages)
+ *     .build());
+ * }</pre>
+ *
+ * Note: Requires Ollama to be installed and running locally
  */
 public class OllamaClient extends OpenAIClient {
     private boolean modelValidated = false;
@@ -31,19 +62,16 @@ public class OllamaClient extends OpenAIClient {
         super(baseUrl, "", model);
     }
 
-    @Override
     protected String getEndpointUrl() {
         return baseUrl + "/chat";
     }
 
-    @Override
     protected Map<String, String> getHeaders() {
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", "application/json");
         return headers;
     }
 
-    @Override
     public ChatResponse chat(ChatRequest request) throws LLMException {
         // Lazy validation of model on first use
         if (!modelValidated) {
@@ -71,7 +99,7 @@ public class OllamaClient extends OpenAIClient {
 
             HttpRequest httpRequest = HttpRequest.newBuilder()
                     .uri(URI.create(getEndpointUrl()))
-                    .headers(getHeadersArray())
+                    .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                     .build();
 
@@ -127,7 +155,6 @@ public class OllamaClient extends OpenAIClient {
         return model;
     }
 
-    @Override
     protected String validateModel(String model) {
         if (model == null || model.trim().isEmpty()) {
             throw new IllegalArgumentException("Model name is required");
@@ -169,5 +196,76 @@ public class OllamaClient extends OpenAIClient {
 
     public String getModel() {
         return model;
+    }
+
+    @Override
+    public Stream<ChatResponse> stream(ChatRequest request) throws LLMException {
+        try {
+            // Set model if not already set
+            if (request.getModel() == null || request.getModel().trim().isEmpty()) {
+                request.setModel(convertModelName(model));
+            }
+
+            // Enable streaming
+            request.setStream(true);
+
+            // Validate model availability
+            validateModelAvailability(request.getModel());
+
+            String jsonBody = objectMapper.writeValueAsString(request);
+            Map<String, String> headers = getHeaders();
+
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(getEndpointUrl()))
+                    .headers(headers.entrySet().stream()
+                            .flatMap(e -> Stream.of(e.getKey(), e.getValue()))
+                            .toArray(String[]::new))
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                    .build();
+
+            HttpResponse<Stream<String>> response = httpClient.send(httpRequest,
+                    HttpResponse.BodyHandlers.ofLines());
+
+            if (response.statusCode() != 200) {
+                throw new LLMException("Ollama API call failed with status " + response.statusCode());
+            }
+
+            return response.body()
+                    .filter(line -> !line.isEmpty())
+                    .map(line -> {
+                        try {
+                            JsonNode node = objectMapper.readTree(line);
+                            if (node.has("error")) {
+                                throw new LLMException("Ollama API error: " + node.get("error").asText());
+                            }
+
+                            // Convert Ollama response format to ChatResponse
+                            ChatResponse chatResponse = new ChatResponse();
+                            chatResponse.setId("ollama-" + Instant.now().toEpochMilli());
+                            chatResponse.setCreated(Instant.now().getEpochSecond());
+                            chatResponse.setModel(request.getModel());
+
+                            Choice choice = new Choice();
+                            Message message = new Message();
+                            message.setRole("assistant");
+                            message.setContent(node.get("response").asText());
+                            choice.setMessage(message);
+                            chatResponse.setChoices(Collections.singletonList(choice));
+
+                            if (node.has("total_duration")) {
+                                Usage usage = new Usage();
+                                usage.setTotalTokens(node.get("eval_count").asInt());
+                                chatResponse.setUsage(usage);
+                            }
+
+                            return chatResponse;
+                        } catch (Exception e) {
+                            throw new RuntimeException("Failed to parse Ollama streaming response", e);
+                        }
+                    });
+
+        } catch (Exception e) {
+            throw new LLMException("Failed to get streaming chat completion from Ollama", e);
+        }
     }
 }

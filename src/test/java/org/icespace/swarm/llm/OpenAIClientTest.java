@@ -13,6 +13,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class OpenAIClientTest {
+    private static final String DEFAULT_BASE_URL = "https://api.openai.com/v1";
     private OpenAIClient client;
     private ObjectMapper objectMapper;
 
@@ -22,14 +23,14 @@ class OpenAIClientTest {
         String baseUrl = TestEnv.get("OPENAI_BASE_URL");
         String model = TestEnv.require("OPENAI_MODEL");
 
-        client = baseUrl != null ? new OpenAIClient(baseUrl, apiKey, model) : new OpenAIClient(apiKey, model);
+        client = baseUrl != null ? new OpenAIClient(baseUrl, apiKey, model) : new OpenAIClient(DEFAULT_BASE_URL, apiKey, model);
         objectMapper = new ObjectMapper();
     }
 
     @Test
     void testConstructorWithDefaultEndpoint() throws Exception {
         System.out.println("\n=== OpenAI Default Endpoint Test ===");
-        OpenAIClient defaultClient = new OpenAIClient(TestEnv.require("OPENAI_API_KEY"), "gpt-3.5-turbo");
+        OpenAIClient defaultClient = new OpenAIClient(DEFAULT_BASE_URL, TestEnv.require("OPENAI_API_KEY"), "gpt-3.5-turbo");
         assertNotNull(defaultClient);
 
         // Test a simple request with default endpoint
@@ -108,7 +109,7 @@ class OpenAIClientTest {
 
     @Test
     void testInvalidApiKey() throws Exception {
-        OpenAIClient invalidClient = new OpenAIClient("invalid-key", "gpt-3.5-turbo");
+        OpenAIClient invalidClient = new OpenAIClient(DEFAULT_BASE_URL, "invalid-key", "gpt-3.5-turbo");
         ChatRequest request = ChatRequest.builder()
                 .model("gpt-3.5-turbo")
                 .messages(List.of(

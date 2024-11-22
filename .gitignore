@@ -3,3 +3,6 @@
 # Ignore actual .env files
 .env
 src/test/resources/.env
+/.vscode
+src/main/resources/logback.xml
+/logs

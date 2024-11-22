@@ -1,8 +1,9 @@
 package org.icespace.swarm.llm.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.*;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,7 +11,27 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
+/**
+ * Represents a request to an LLM service (e.g., OpenAI, ChatGLM, Ollama).
+ * This class follows the OpenAI Chat API format, with support for:
+ * - Basic chat parameters (model, messages, temperature, etc.)
+ * - Tool/function calling (tools, tool_choice)
+ * - Streaming responses
+ * - Response formatting (n, max_tokens)
+ * - Response quality control (presence_penalty, frequency_penalty)
+ *
+ * Example usage:
+ * <pre>{@code
+ * ChatRequest request = ChatRequest.builder()
+ *     .model("gpt-4")
+ *     .messages(Arrays.asList(new Message("user", "Hello!")))
+ *     .tools(Arrays.asList(weatherTool))
+ *     .toolChoice("auto")
+ *     .build();
+ * }</pre>
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -54,9 +75,54 @@ public class ChatRequest {
     @JsonProperty("user")
     private String user;
 
-    @JsonProperty("functions")
-    private List<FunctionSchema> functions;
+    @JsonProperty("tools")
+    private List<Tool> tools;
 
-    @JsonProperty("function_call")
-    private Object functionCall;
+    @JsonProperty("tool_choice")
+    private Object toolChoice;
+
+    // For backward compatibility
+    @JsonIgnore
+    public List<FunctionSchema> getFunctions() {
+        if (tools == null) return null;
+        return tools.stream()
+                .map(Tool::getFunction)
+                .collect(Collectors.toList());
+    }
+
+    @JsonIgnore
+    public void setFunctions(List<FunctionSchema> functions) {
+        if (functions == null) {
+            this.tools = null;
+        } else {
+            this.tools = functions.stream()
+                    .map(Tool::fromFunctionSchema)
+                    .collect(Collectors.toList());
+        }
+    }
+
+    @JsonIgnore
+    public Object getFunctionCall() {
+        return toolChoice;
+    }
+
+    @JsonIgnore
+    public void setFunctionCall(Object functionCall) {
+        this.toolChoice = convertFunctionCallToToolChoice(functionCall);
+    }
+
+    private Object convertFunctionCallToToolChoice(Object functionCall) {
+        if (functionCall == null) return null;
+        if (functionCall instanceof String && functionCall.equals("auto")) {
+            return "auto";
+        }
+        if (functionCall instanceof Map) {
+            ObjectMapper mapper = new ObjectMapper();
+            ObjectNode toolChoice = mapper.createObjectNode();
+            toolChoice.put("type", "function");
+            toolChoice.set("function", mapper.valueToTree(functionCall));
+            return toolChoice;
+        }
+        return functionCall;
+    }
 }

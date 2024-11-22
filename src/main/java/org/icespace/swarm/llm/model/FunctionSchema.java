@@ -11,6 +11,35 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Represents the schema of a function that can be called by the LLM.
+ * This schema describes the function's:
+ * - Name
+ * - Description
+ * - Parameters (type, properties, required fields)
+ *
+ * The schema follows the OpenAI Chat API format and JSON Schema spec:
+ * {
+ *   "name": "get_weather",
+ *   "description": "Get the weather in a location",
+ *   "parameters": {
+ *     "type": "object",
+ *     "properties": {
+ *       "location": {
+ *         "type": "string",
+ *         "description": "City and state (e.g. San Francisco, CA)"
+ *       }
+ *     },
+ *     "required": ["location"]
+ *   }
+ * }
+ *
+ * This schema helps the LLM understand:
+ * - When to call the function
+ * - What parameters are needed
+ * - What each parameter means
+ * - Which parameters are required vs optional
+ */
 @Data
 @Builder
 @NoArgsConstructor
