@@ -1,6 +1,7 @@
 package org.icespace.swarm.examples.weather;
 
 import org.icespace.swarm.core.Swarm;
+import org.icespace.swarm.core.SwarmResponse;
 import org.icespace.swarm.llm.LLMClient;
 import org.icespace.swarm.llm.model.ChatResponse;
 import org.icespace.swarm.llm.model.Message;
@@ -38,7 +39,7 @@ public class WeatherExample {
                     .content("What's the weather like in San Francisco?")
                     .build();
             
-            ChatResponse response1 = swarm.run(
+            SwarmResponse response1 = swarm.run(
                     agent,
                     Arrays.asList(weatherQuery),
                     context,
@@ -46,7 +47,7 @@ public class WeatherExample {
                     false,
                     true,
                     10);
-            log.info("Response: {}", response1.getChoices().get(0).getMessage().getContent());
+            log.info("Response: {}", response1.getLastMessage());
 
             // Test Scenario 2: Weather + Email
             log.info("\nTest Scenario 2: Weather + Email combination");
@@ -55,7 +56,7 @@ public class WeatherExample {
                     .content("What's the weather like in San Francisco? Send an email about it to test@example.com")
                     .build();
             
-            ChatResponse response2 = swarm.run(
+                    SwarmResponse response2 = swarm.run(
                     agent,
                     Arrays.asList(emailQuery),
                     context,
@@ -63,7 +64,7 @@ public class WeatherExample {
                     false,
                     true,
                     10);
-            log.info("Response: {}", response2.getChoices().get(0).getMessage().getContent());
+            log.info("Response: {}", response2.getLastMessage());
 
             // Test Scenario 3: Streaming example
             log.info("\nTest Scenario 3: Streaming weather updates");
@@ -71,8 +72,8 @@ public class WeatherExample {
                     .role("user")
                     .content("Give me detailed weather information for New York City")
                     .build();
-            
-            swarm.run(
+
+            SwarmResponse response3 = swarm.run(
                     agent,
                     Arrays.asList(streamQuery),
                     context,
@@ -80,6 +81,7 @@ public class WeatherExample {
                     true,  // Enable streaming
                     true,
                     10);
+            log.info("Response of Scenario3: {}", response3.getLastMessage());
 
             // Test Scenario 4: Error handling
             log.info("\nTest Scenario 4: Error handling");

@@ -103,6 +103,15 @@ public class Swarm {
                             if (result instanceof Agent) {
                                 activeAgent = (Agent) result;
                             }
+                            // add function call to the history
+                            ToolCall toolCall = responseMessage.getToolCalls()[0];
+                            Message callMessage = Message.builder()
+                                    .role("tool")
+                                    .toolCallId(toolCall.getId())
+                                    .toolName(toolCall.getFunction().getName())
+                                    .content(result.toString())
+                                    .build();
+                            history.add(callMessage);
                         }
                     }
 
@@ -289,26 +298,6 @@ public class Swarm {
         return buildFinalResponse(history, agent, context);
     }
 
-    private void checkResponseError(Map<String, Object> completion) {
-        Map<String, Object> error = (Map<String, Object>) completion.get("error");
-        if (error != null) {
-            String errorMessage = error.containsKey("message") ? error.get("message").toString() : "Unknown error";
-            int errorCode = error.containsKey("code") ? Integer.parseInt(error.get("code").toString()) : 0;
-
-            @SuppressWarnings("unchecked")
-            Map<String, Object> metadata = error.containsKey("metadata") ? (Map<String, Object>) error.get("metadata")
-                    : Collections.emptyMap();
-
-            String rawError = metadata.containsKey("raw") ? metadata.get("raw").toString() : "";
-            String provider = metadata.containsKey("provider_name") ? metadata.get("provider_name").toString()
-                    : "Unknown";
-
-            log.error("LLM error from {}: {} (code: {})\nRaw error: {}",
-                    provider, errorMessage, errorCode, rawError);
-
-            throw new SwarmException(String.format("LLM error: %s (provider: %s)", errorMessage, provider));
-        }
-    }
 
     private void checkResponseError(ChatResponse completion) {
         if (completion == null) {

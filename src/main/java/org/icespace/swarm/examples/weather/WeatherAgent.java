@@ -1,7 +1,6 @@
 package org.icespace.swarm.examples.weather;
 
 import org.icespace.swarm.core.Agent;
-import org.icespace.swarm.core.Result;
 import org.icespace.swarm.core.ToolChoice;
 import org.icespace.swarm.function.annotations.FunctionSpec;
 import org.icespace.swarm.function.annotations.Parameter;
@@ -115,6 +114,18 @@ public class WeatherAgent extends Agent {
             this.humidity = humidity;
             this.wind = wind;
             this.forecast = forecast;
+        }
+
+        public String toString() {
+            return String.format(
+                "Current Weather for %s:\n" +
+                "Temperature: %s\n" +
+                "Conditions: %s\n" +
+                "Humidity: %s\n" +
+                "Wind: %s\n" +
+                "Forecast: %s",
+                location, temperature, conditions, humidity, wind, forecast
+            );
         }
     }
 }
