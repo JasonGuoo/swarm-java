@@ -37,7 +37,7 @@ public class WeatherAgent extends Agent {
     }
 
     @FunctionSpec(description = "Get the current weather in a given location")
-    public Result getWeather(
+    public String getWeather(
             @Parameter(description = "The city and state, e.g. San Francisco, CA") String location,
             Map<String, Object> context) {
         if (location == null || location.trim().isEmpty()) {
@@ -63,17 +63,14 @@ public class WeatherAgent extends Agent {
                 "Clear skies for the next 24 hours"
             );
             
-            return new Result(weather)
-                    .withContextUpdate("last_location", location)
-                    .withContextUpdate("last_weather", weather)
-                    .withContextUpdate("last_weather_time", System.currentTimeMillis());
+            return weather.toString();
         } catch (Exception e) {
             throw new RuntimeException("Failed to get weather for location: " + location, e);
         }
     }
 
     @FunctionSpec(description = "Send an email with the weather information")
-    public Result sendEmail(
+    public Object sendEmail(
             @Parameter(description = "Email recipient") String to,
             @Parameter(description = "Email subject", defaultValue = "Weather Update") String subject,
             @Parameter(description = "Email body") String body,
@@ -99,10 +96,7 @@ public class WeatherAgent extends Agent {
         System.out.println("Subject: " + subject);
         System.out.println("Body: " + body);
 
-        return new Result("Email sent successfully")
-                .withContextUpdate("last_email_to", to)
-                .withContextUpdate("last_email_subject", subject)
-                .withContextUpdate("last_email_time", System.currentTimeMillis());
+        return "Email sent successfully";
     }
 
     public static class WeatherResponse {
