@@ -39,7 +39,7 @@ public class Swarm {
     /**
      * Run agent with messages and context
      */
-    public ChatResponse run(
+    public SwarmResponse run(
             Agent agent,
             List<Message> messages,
             Map<String, Object> contextVariables,
@@ -51,10 +51,11 @@ public class Swarm {
                 agent.getClass().getSimpleName(), stream, maxTurns);
 
         try {
-            if (stream) {
-                log.debug("Using streaming mode");
-                return runAndStream(agent, messages, contextVariables, modelOverride, debug, maxTurns);
-            }
+            // if (stream) {
+            // log.debug("Using streaming mode");
+            // return runAndStream(agent, messages, contextVariables, modelOverride, debug,
+            // maxTurns);
+            // }
 
             Agent activeAgent = agent;
             Map<String, Object> context = contextManager.initializeContext(contextVariables);
@@ -62,8 +63,8 @@ public class Swarm {
 
             List<Message> history = new ArrayList<>();
             history.addAll(messages);
-            
-            int initLen = messages.size(); 
+
+            int initLen = messages.size();
             int turn = 0;
 
             while (history.size() - initLen < maxTurns && activeAgent != null) {
@@ -79,33 +80,62 @@ public class Swarm {
                     ChatResponse completion = getChatCompletion(
                             activeAgent, history, context, modelOverride, stream, debug);
 
+                    checkResponseError(completion);
+
                     // Break if no tool calls - task is complete
                     if (!hasToolCalls(completion)) {
                         log.debug("No tool calls in response, ending turn");
-                        processResponse(completion, activeAgent, history, context);
+                        // Add the response message to history
+                        if (completion.getChoices() != null && !completion.getChoices().isEmpty()) {
+                            Message responseMessage = completion.getChoices().get(0).getMessage();
+                            history.add(responseMessage);
+                        }
                         break;
                     }
 
-                    processResponse(completion, activeAgent, history, context);
+                    // Add the response message to history
+                    if (completion.getChoices() != null && !completion.getChoices().isEmpty()) {
+                        Message responseMessage = completion.getChoices().get(0).getMessage();
+                        history.add(responseMessage);
+                        // Handle any tool calls
+                        if (hasToolCalls(completion)) {
+                            Object result = handleToolCalls(completion, activeAgent, history, context);
+                            if (result instanceof Agent) {
+                                activeAgent = (Agent) result;
+                            }
+                            // add function call to the history
+                            ToolCall toolCall = responseMessage.getToolCalls()[0];
+                            Message callMessage = Message.builder()
+                                    .role("tool")
+                                    .toolCallId(toolCall.getId())
+                                    .toolName(toolCall.getFunction().getName())
+                                    .content(result.toString())
+                                    .build();
+                            history.add(callMessage);
+                        }
+                    }
 
                     if (debug) {
                         log.debug("Updated history after processing response:");
                         printHistory(history);
                     }
 
-                    Agent nextAgent = checkHandoff(completion, context);
-                    if (nextAgent != null) {
-                        log.info("Handing off to new agent: {}", nextAgent.getClass().getSimpleName());
-                        activeAgent = nextAgent;
-                    }
                 } catch (Exception e) {
                     log.error("Error during turn {}: {}", turn, e.getMessage());
-                    return handleError(e, activeAgent, context);
+                    return SwarmResponse.builder()
+                            .history(history)
+                            .activeAgent(activeAgent)
+                            .context(context)
+                            .build();
                 }
             }
 
             log.info("Swarm execution completed successfully after {} turns", turn);
-            return buildFinalResponse(history, activeAgent, context);
+            return SwarmResponse.builder()
+                    .history(history)
+                    .activeAgent(activeAgent)
+                    .context(context)
+                    .build();
 
         } catch (Exception e) {
             log.error("Fatal error in Swarm execution: {}", e.getMessage(), e);
@@ -141,11 +171,12 @@ public class Swarm {
                 log.info("Attempting to retry operation");
                 return retryOperation(agent, context);
             }
-//            else if (errorHandler.needsFallback(e)) {
-//                log.info("Switching to fallback agent");
-//                Agent fallbackAgent = errorHandler.getFallbackAgent();
-//                return fallbackAgent.execute(buildRequest(fallbackAgent, new ArrayList<>(), context, null), context);
-//            }
+            // else if (errorHandler.needsFallback(e)) {
+            // log.info("Switching to fallback agent");
+            // Agent fallbackAgent = errorHandler.getFallbackAgent();
+            // return fallbackAgent.execute(buildRequest(fallbackAgent, new ArrayList<>(),
+            // context, null), context);
+            // }
             else {
                 log.error("Fatal error, restoring state");
                 errorHandler.restoreState(context);
@@ -176,7 +207,7 @@ public class Swarm {
                     // Use all available functions
                     List<Map<String, Object>> tools = agent.getTools();
                     List<FunctionSchema> functions = new ArrayList<>();
-                    
+
                     if (tools != null) {
                         for (Map<String, Object> tool : tools) {
                             try {
@@ -237,14 +268,14 @@ public class Swarm {
             int maxTurns) {
         Map<String, Object> context = contextManager.initializeContext(contextVariables);
         List<Message> history = new ArrayList<>();
-        
+
         // Add system prompt as first message
         history.add(Message.builder()
                 .role("system")
                 .content(agent.getSystemPrompt(context))
                 .build());
         history.addAll(messages);
-        
+
         List<Message> responseMessages = new ArrayList<>();
 
         try (Stream<ChatResponse> stream = client.stream(
@@ -259,7 +290,7 @@ public class Swarm {
 
                 // Check for tool calls in the chunk
                 if (hasToolCalls(response)) {
-                    handleToolCalls(response, agent, history, context);
+                    Object result = handleToolCalls(response, agent, history, context);
                 }
             });
         }
@@ -267,65 +298,31 @@ public class Swarm {
         return buildFinalResponse(history, agent, context);
     }
 
-    /**
-     * Process a response and handle any tool calls
-     */
-    private void processResponse(
-            ChatResponse completion,
-            Agent activeAgent,
-            List<Message> history,
-            Map<String, Object> context) {
 
-        // Check for error in response
-        Map<String, Object> error = completion.getFieldValue("/error", Map.class);
-        if (error != null) {
+    private void checkResponseError(ChatResponse completion) {
+        if (completion == null) {
+            throw new SwarmException("Received null ChatResponse");
+        }
+
+        // Check for error using dynamic field access
+        Map<String, Object> error = completion.getFieldValue("error", Map.class);
+        if (error != null && !error.isEmpty()) {
             String errorMessage = error.containsKey("message") ? error.get("message").toString() : "Unknown error";
             int errorCode = error.containsKey("code") ? Integer.parseInt(error.get("code").toString()) : 0;
-            
+
             @SuppressWarnings("unchecked")
-            Map<String, Object> metadata = error.containsKey("metadata") ? 
-                (Map<String, Object>) error.get("metadata") : Collections.emptyMap();
-            
+            Map<String, Object> metadata = error.containsKey("metadata") ? (Map<String, Object>) error.get("metadata")
+                    : Collections.emptyMap();
+
             String rawError = metadata.containsKey("raw") ? metadata.get("raw").toString() : "";
-            String provider = metadata.containsKey("provider_name") ? metadata.get("provider_name").toString() : "Unknown";
-            
-            log.error("LLM error from {}: {} (code: {})\nRaw error: {}", 
-                provider, errorMessage, errorCode, rawError);
-            
+            String provider = metadata.containsKey("provider_name") ? metadata.get("provider_name").toString()
+                    : "Unknown";
+
+            log.error("LLM error from {}: {} (code: {})\nRaw error: {}",
+                    provider, errorMessage, errorCode, rawError);
+
             throw new SwarmException(String.format("LLM error: %s (provider: %s)", errorMessage, provider));
         }
-
-        // Add the response message to history
-        if (completion.getChoices() != null && !completion.getChoices().isEmpty()) {
-            Message responseMessage = completion.getChoices().get(0).getMessage();
-            history.add(responseMessage);
-
-            // Handle any tool calls
-            if (hasToolCalls(completion)) {
-                handleToolCalls(completion, activeAgent, history, context);
-            }
-        }
-    }
-
-    /**
-     * Check for agent handoff in response
-     */
-    private Agent checkHandoff(ChatResponse completion, Map<String, Object> context) {
-        // Check for handoff in the response
-        String targetAgent = completion.getFieldValue("/target_agent", String.class);
-        if (targetAgent != null) {
-            try {
-                // Load agent class dynamically
-                Class<?> agentClass = Class.forName(targetAgent);
-                if (Agent.class.isAssignableFrom(agentClass)) {
-                    log.info("Handing off to agent: {}", targetAgent);
-                    return (Agent) agentClass.getDeclaredConstructor().newInstance();
-                }
-            } catch (Exception e) {
-                log.warn("Failed to instantiate agent {}: {}", targetAgent, e.getMessage());
-            }
-        }
-        return null;
     }
 
     /**
@@ -360,101 +357,84 @@ public class Swarm {
     /**
      * Handle tool calls in response
      */
-    private void handleToolCalls(
+    private Object handleToolCalls(
             ChatResponse response,
             Agent agent,
             List<Message> history,
-            Map<String, Object> context) {
+            Map<String, Object> context) throws SwarmException {
         Message message = response.getChoices().get(0).getMessage();
         ToolCall[] toolCalls = message.getToolCalls();
 
-        if (toolCalls != null) {
-            log.debug("Processing {} tool calls", toolCalls.length);
+        log.debug("Processing {} tool calls", toolCalls.length);
+        Object result = null;
 
-            for (ToolCall toolCall : toolCalls) {
-                try {
-                    String functionName = toolCall.getFunction().getName();
-                    log.debug("Executing tool call: {}", functionName);
+        for (ToolCall toolCall : toolCalls) {
+            try {
+                String functionName = toolCall.getFunction().getName();
+                log.debug("Executing tool call: {}", functionName);
 
-                    // Get function spec and validate
-                    Map<String, Object> functionSpec = agent.getFunctionSpec(functionName);
-                    if (functionSpec == null) {
-                        throw new SwarmException("Function not found: " + functionName);
-                    }
-
-                    // Parse arguments
-                    Map<String, Object> arguments = objectMapper.readValue(
-                            toolCall.getFunction().getArguments(),
-                            new TypeReference<Map<String, Object>>() {
-                            });
-
-                    // Get method and parameters
-                    Method method = agent.findFunction(functionName);
-                    java.lang.reflect.Parameter[] methodParams = method.getParameters();
-                    if (methodParams == null || methodParams.length == 0) {
-                        throw new SwarmException("No parameters defined for function: " + functionName);
-                    }
-
-                    // Prepare arguments with default values
-                    Object[] args = new Object[methodParams.length];
-                    for (int i = 0; i <methodParams.length; i++) {
-                        java.lang.reflect.Parameter methodParam = methodParams[i];
-                        Parameter paramAnnotation = methodParam.getAnnotation(Parameter.class);
-                        
-                        // Check specifically for 'context' parameter
-                        if (methodParam.getName().equals("context") && 
-                            methodParam.getType().equals(Map.class) && 
-                            methodParam.getParameterizedType().getTypeName().equals("java.util.Map<java.lang.String, java.lang.Object>")) {
-                            args[i] = context;
-                            continue;
-                        }
-                        
-                        if (paramAnnotation == null) {
-                            // Skip parameters without @Parameter annotation
-                            continue;
-                        }
-
-                        String paramName = methodParam.getName();
-                        Object value = arguments.get(paramName);
-
-                        if (value == null && !paramAnnotation.defaultValue().isEmpty()) {
-                            // Use default value if provided
-                            value = convertArgument(paramAnnotation.defaultValue(), methodParam.getType());
-                        } else if (value == null) {
-                            throw new SwarmException("Required parameter missing: " + paramName);
-                        }
-
-                        args[i] = convertArgument(value, methodParam.getType());
-                    }
-
-                    // Invoke the function
-                    Result result = (Result) method.invoke(agent, args);
-
-                    // Update context with any changes from the result
-                    if (result.hasContextUpdates()) {
-                        context.putAll(result.getContextUpdates());
-                    }
-
-                    // Add function result to history
-                    history.add(Message.builder()
-                            .role("tool")
-                            .toolName(functionName)
-                            .toolCallId(toolCall.getId())
-                            .content(objectMapper.writeValueAsString(result.getValue()))
-                            .build());
-
-                    if (log.isDebugEnabled()) {
-                        log.debug("History after tool call {}:", functionName);
-                        printHistory(history);
-                    }
-
-                } catch (Exception e) {
-                    log.error("Error executing tool call {}: {}",
-                            toolCall.getFunction().getName(), e.getMessage());
-                    throw new SwarmException("Tool call execution failed", e);
+                // Get function spec and validate
+                Map<String, Object> functionSpec = agent.getFunctionSpec(functionName);
+                if (functionSpec == null) {
+                    throw new SwarmException("Function not found: " + functionName);
                 }
+
+                // Parse arguments
+                Map<String, Object> arguments = objectMapper.readValue(
+                        toolCall.getFunction().getArguments(),
+                        new TypeReference<Map<String, Object>>() {
+                        });
+
+                // Get method and parameters
+                Method method = agent.findFunction(functionName);
+                java.lang.reflect.Parameter[] methodParams = method.getParameters();
+                if (methodParams == null || methodParams.length == 0) {
+                    throw new SwarmException("No parameters defined for function: " + functionName);
+                }
+
+                // Prepare arguments with default values
+                Object[] args = new Object[methodParams.length];
+                for (int i = 0; i < methodParams.length; i++) {
+                    java.lang.reflect.Parameter methodParam = methodParams[i];
+                    Parameter paramAnnotation = methodParam.getAnnotation(Parameter.class);
+
+                    // Check specifically for 'context' parameter
+                    if (methodParam.getName().equals("context") &&
+                            methodParam.getType().equals(Map.class) &&
+                            methodParam.getParameterizedType().getTypeName()
+                                    .equals("java.util.Map<java.lang.String, java.lang.Object>")) {
+                        args[i] = context;
+                        continue;
+                    }
+
+                    if (paramAnnotation == null) {
+                        // Skip parameters without @Parameter annotation
+                        continue;
+                    }
+
+                    String paramName = methodParam.getName();
+                    Object value = arguments.get(paramName);
+
+                    if (value == null && !paramAnnotation.defaultValue().isEmpty()) {
+                        // Use default value if provided
+                        value = convertArgument(paramAnnotation.defaultValue(), methodParam.getType());
+                    } else if (value == null) {
+                        throw new SwarmException("Required parameter missing: " + paramName);
+                    }
+
+                    args[i] = convertArgument(value, methodParam.getType());
+                }
+
+                // Invoke the function
+                result = method.invoke(agent, args);
+
+            } catch (Exception e) {
+                log.error("Error executing tool call {}: {}",
+                        toolCall.getFunction().getName(), e.getMessage());
+                throw new SwarmException("Tool call execution failed", e);
             }
         }
+        return result;
     }
 
     /**
@@ -544,32 +524,33 @@ public class Swarm {
         }
 
         private void validateContextUpdates(Map<String, Object> updates) {
-            if (updates == null) return;
-            
+            if (updates == null)
+                return;
+
             // Validate context size
             if (updates.size() > 100) {
                 throw new SwarmException("Context update too large: " + updates.size() + " entries");
             }
-            
+
             // Validate value types and sizes
             for (Map.Entry<String, Object> entry : updates.entrySet()) {
                 String key = entry.getKey();
                 Object value = entry.getValue();
-                
+
                 // Check key format
                 if (!key.matches("^[a-zA-Z0-9_]+$")) {
                     throw new SwarmException("Invalid context key format: " + key);
                 }
-                
+
                 // Check value type
-                if (value != null && !(value instanceof String || 
-                                     value instanceof Number || 
-                                     value instanceof Boolean || 
-                                     value instanceof Map || 
-                                     value instanceof List)) {
+                if (value != null && !(value instanceof String ||
+                        value instanceof Number ||
+                        value instanceof Boolean ||
+                        value instanceof Map ||
+                        value instanceof List)) {
                     throw new SwarmException("Invalid context value type for key: " + key);
                 }
-                
+
                 // Check string length
                 if (value instanceof String && ((String) value).length() > 10000) {
                     throw new SwarmException("Context string value too long for key: " + key);
