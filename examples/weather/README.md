@@ -1,16 +1,174 @@
 # Weather Agent Example
 
-This example demonstrates how to create a weather assistant using SwarmJava. The agent can check weather conditions and send email notifications.
+This example demonstrates how to create a weather assistant using the Swarm Java framework. The agent can check weather conditions and send email notifications, showcasing key features of the framework.
 
 ## Features Demonstrated
+- Custom agent implementation with tool functions
 - Function annotations with `@FunctionSpec` and `@Parameter`
-- Context management for rate limiting and state persistence
-- Error handling and input validation
-- Integration with external services (weather API and email)
-- Custom system prompts
-- Automatic tool selection
+- System prompt design and tool choice configuration
+- Input validation and error handling
+- JSON response formatting
+- Streaming and non-streaming responses
+- Context management for state persistence
 
-## Implementation
+## Implementation Guide
+
+### 1. Create Your Agent Class
+
+```java
+public class WeatherAgent extends Agent {
+    public WeatherAgent() {
+        super();
+    }
+}
+```
+
+### 2. Define System Prompt
+
+The system prompt is crucial for guiding the LLM's behavior:
+
+```java
+@Override
+public String getSystemPrompt(Map<String, Object> context) {
+    return "You are a helpful weather assistant that can:\n" +
+           "1. Get current weather information\n" +
+           "2. Send weather updates via email\n" +
+           "Always provide clear and concise responses.";
+}
+```
+
+### 3. Configure Tool Choice
+
+```java
+@Override
+public ToolChoice getToolChoice() {
+    return ToolChoice.AUTO;  // Let LLM choose appropriate tools
+}
+```
+
+### 4. Implement Tool Functions
+
+Add functions with proper annotations:
+
+```java
+@FunctionSpec(description = "Get the current weather in a given location")
+public String getWeather(
+    @Parameter(description = "The city and state") String location,
+    Map<String, Object> context) {
+    // Implementation
+}
+
+@FunctionSpec(description = "Send weather update email")
+public Object sendEmail(
+    @Parameter(description = "Email recipient") String to,
+    @Parameter(description = "Email subject", defaultValue = "Weather Update") String subject,
+    @Parameter(description = "Email body") String body,
+    Map<String, Object> context) {
+    // Implementation
+}
+```
+
+### 5. Using the Agent
+
+Basic usage pattern:
+
+```java
+// Initialize the framework
+LLMClient client = ExampleEnvironment.createClient();
+Swarm swarm = new Swarm(client);
+WeatherAgent agent = new WeatherAgent();
+
+// Create a message
+Message message = Message.builder()
+    .role("user")
+    .content("What's the weather in San Francisco?")
+    .build();
+
+// Run the agent
+SwarmResponse response = swarm.run(
+    agent,                    // Your agent
+    Arrays.asList(message),   // Messages
+    new HashMap<>(),         // Context
+    null,                    // Model override (optional)
+    false,                   // Streaming mode
+    true,                    // Debug mode
+    10                       // Max turns
+);
+
+// Get the response
+System.out.println(response.getLastMessage());
+```
+
+## Advanced Features
+
+### 1. Streaming Responses
+
+Enable streaming for real-time responses:
+
+```java
+SwarmResponse response = swarm.run(
+    agent,
+    messages,
+    context,
+    null,
+    true,  // Enable streaming
+    true,
+    10
+);
+```
+
+### 2. Context Management
+
+Use context to store session state:
+
+```java
+Map<String, Object> context = new HashMap<>();
+context.put("temperature_unit", "fahrenheit");
+context.put("email_signature", "Best regards,\nWeather Bot");
+```
+
+### 3. Error Handling
+
+Implement proper validation and error handling:
+
+```java
+if (location == null || location.trim().isEmpty()) {
+    throw new IllegalArgumentException("Location cannot be empty");
+}
+```
+
+## Best Practices
+
+1. **System Prompts**
+   - Be specific about agent capabilities
+   - Include clear instructions
+   - Define response format expectations
+
+2. **Tool Functions**
+   - Use descriptive annotations
+   - Implement proper validation
+   - Return structured responses
+   - Handle errors gracefully
+
+3. **Response Formatting**
+   - Use consistent JSON structure
+   - Include all relevant information
+   - Handle special characters properly
+
+4. **Context Management**
+   - Use context for session state
+   - Implement proper cleanup
+   - Consider thread safety
+
+## Example Scenarios
+
+The example includes four test scenarios:
+1. Basic weather query
+2. Weather + Email combination
+3. Streaming weather updates
+4. Error handling demonstration
+
+Each scenario demonstrates different aspects of the framework's capabilities.
 
 ### 1. Weather Agent Implementation
 
@@ -136,7 +294,6 @@ public class WeatherAgent extends Agent {
                 .withContextUpdate("last_email_time", System.currentTimeMillis());
     }
 }
-```
 
 ### 2. Usage Example
 

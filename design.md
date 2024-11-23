@@ -50,26 +50,44 @@
 
 ## Core Workflows
 
-1. **Agent Execution Flow**
+1. **Main Loop Flow**
 ```
-Initialize Agent
+Initialize
+    - Create active agent
+    - Initialize context variables
+    - Create message history
     ↓
-Load System Prompt
+Start Turn Loop (while history.size() - initLen < maxTurns)
     ↓
-Discover Functions (via annotations)
-    - Scan for @FunctionSpec
-    - Extract parameter info
-    - Build function descriptions
+Get LLM Response
+    - Build request with agent, history, context
+    - Get completion from LLM (streaming or non-streaming)
+    - Check for response errors
     ↓
-Process Messages
+Process Response
+    - If streaming:
+        - Accumulate content chunks
+        - Track tool call messages
+        - Create final combined message
+    - Add response to history
     ↓
-Handle Tool Calls
+Handle Tool Calls (if present)
+    - Extract function name and arguments
     - Validate function exists
-    - Convert parameters
-    - Execute function
-    - Process result
+    - Parse and convert arguments
+    - Execute function with context
+    - Add tool call result to history
+    - Update active agent if result is Agent
     ↓
-Generate Response
+Update Context
+    - Process context updates
+    - Validate updates
+    - Apply thread-safe updates
+    ↓
+Continue or Complete
+    - If no tool calls: task complete
+    - If max turns reached: complete
+    - Otherwise: continue loop
 ```
 
 2. **Function Discovery Flow**

@@ -1,23 +1,46 @@
+/**
+ * WeatherAgent - Example implementation of a Swarm Agent
+ * 
+ * This class demonstrates how to create a custom agent using the Swarm framework.
+ * Key components of an agent implementation:
+ * 1. Extend the Agent class
+ * 2. Implement required methods (getSystemPrompt, getToolChoice)
+ * 3. Define tool functions using @FunctionSpec annotation
+ */
 package org.icespace.swarm.examples.weather;
 
 import org.icespace.swarm.core.Agent;
 import org.icespace.swarm.core.ToolChoice;
 import org.icespace.swarm.function.annotations.FunctionSpec;
 import org.icespace.swarm.function.annotations.Parameter;
-import org.icespace.swarm.llm.LLMClient;
-import org.icespace.swarm.llm.model.*;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Map;
-import java.util.stream.Stream;
+import java.util.regex.Pattern;
 
 public class WeatherAgent extends Agent {
-    private final LLMClient client;
 
-    public WeatherAgent(LLMClient client) {
-        this.client = client;
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,6}$",
+            Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Constructor - Initialize the agent with an LLM client
+     * The LLM client is required for communication with the language model
+     */
+    public WeatherAgent() {
+        super();
     }
 
+    /**
+     * System Prompt - Defines the agent's behavior and capabilities
+     * This is the first message sent to the LLM to establish the context
+     * 
+     * Best practices for system prompts:
+     * 1. Clearly define the agent's role and capabilities
+     * 2. Specify the expected input and output formats
+     * 3. Include any special instructions or constraints
+     */
     @Override
     public String getSystemPrompt(Map<String, Object> context) {
         return "You are a helpful weather assistant that can check the weather and send emails.\n" +
@@ -30,11 +53,29 @@ public class WeatherAgent extends Agent {
                 "Be concise and friendly in your responses.";
     }
 
+    /**
+     * Tool Choice - Defines how the agent selects tools
+     * AUTO: Let the LLM choose appropriate tools
+     * NONE: No tools available
+     * FUNCTION: Specific function(s) to be used
+     */
     @Override
     public ToolChoice getToolChoice() {
         return ToolChoice.AUTO;
     }
 
+    /**
+     * Weather Tool Function
+     * 
+     * @FunctionSpec annotation defines:
+     * - Function name and description for the LLM
+     * - Parameter descriptions and constraints
+     * 
+     * @Parameter annotation for each parameter:
+     * - Description: Clear explanation of the parameter
+     * - Default values (if applicable)
+     * - Required/Optional status
+     */
     @FunctionSpec(description = "Get the current weather in a given location")
     public String getWeather(
             @Parameter(description = "The city and state, e.g. San Francisco, CA") String location,
@@ -68,6 +109,15 @@ public class WeatherAgent extends Agent {
         }
     }
 
+    /**
+     * Email Tool Function
+     * 
+     * Example of a function with multiple parameters and input validation
+     * Shows how to:
+     * 1. Use default values in @Parameter
+     * 2. Validate input parameters
+     * 3. Return results with context updates
+     */
     @FunctionSpec(description = "Send an email with the weather information")
     public Object sendEmail(
             @Parameter(description = "Email recipient") String to,
@@ -98,6 +148,14 @@ public class WeatherAgent extends Agent {
         return "Email sent successfully";
     }
 
+    /**
+     * Helper class for weather data
+     * 
+     * Best practices:
+     * 1. Use clear field names
+     * 2. Include JsonProperty annotations for serialization
+     * 3. Implement toString() for readable output
+     */
     public static class WeatherResponse {
         @JsonProperty private final String location;
         @JsonProperty private final String temperature;
@@ -118,14 +176,29 @@ public class WeatherAgent extends Agent {
 
         public String toString() {
             return String.format(
-                "Current Weather for %s:\n" +
-                "Temperature: %s\n" +
-                "Conditions: %s\n" +
-                "Humidity: %s\n" +
-                "Wind: %s\n" +
-                "Forecast: %s",
-                location, temperature, conditions, humidity, wind, forecast
+                "{" +
+                "\"location\":\"%s\"," +
+                "\"temperature\":\"%s\"," +
+                "\"conditions\":\"%s\"," +
+                "\"humidity\":\"%s\"," +
+                "\"wind\":\"%s\"," +
+                "\"forecast\":\"%s\"" +
+                "}",
+                escapeJson(location),
+                escapeJson(temperature),
+                escapeJson(conditions),
+                escapeJson(humidity),
+                escapeJson(wind),
+                escapeJson(forecast)
             );
+        }
+
+        private String escapeJson(String str) {
+            if (str == null) return "";
+            return str.replace("\"", "\\\"")
+                     .replace("\n", "\\n")
+                     .replace("\r", "\\r")
+                     .replace("\t", "\\t");
         }
     }
 }
