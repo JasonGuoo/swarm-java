@@ -54,10 +54,20 @@ What makes Swarm powerful:
 - **Flexible Integration**: Simple HTTP-based implementation ensures compatibility across different LLM providers
 - **Dynamic Workflows**: LLM-powered decisions for agent transitions create adaptive task handling
 
-🚧 **Under Active Development** 🚧
-This project is currently in early development. APIs and features are subject to change, and many components are still being implemented. Feel free to star/watch the repository to stay updated on its progress.
+## Project Status
 
-⚠️ **Note**: This is an experimental framework intended to explore ergonomic interfaces for multi-agent systems in Java. Like the original Python implementation, it is primarily for educational purposes.
+The project now has its core functionality ready and stable:
+
+1. **Dynamic Function Calling**: Automatically calls annotated functions based on LLM responses
+2. **Agent Switching**: Seamlessly switches between agents based on LLM decisions
+3. **LLM Support**: Integrates with multiple LLM providers:
+   - OpenAI
+   - Azure OpenAI
+   - ChatGLM
+   - Ollama
+4. **Verified Implementation**: Core functionality has been tested and verified with OpenAI API
+
+The framework is now ready for building multi-agent applications while we continue to add more features and improvements.
 
 ## Requirements
 

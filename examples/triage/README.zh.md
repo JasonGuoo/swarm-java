@@ -123,6 +123,19 @@ SwarmResponse response = swarm.run(
         10);
 ```
 
+## 项目状态
+
+本项目的基础功能已经完备，目前可以：
+
+1. 基于LLM的响应动态调用带注解的函数
+2. 根据LLM的要求实现代理之间的切换
+3. 已通过OpenAI API进行测试验证
+4. 支持多种LLM模型：
+   - OpenAI
+   - Azure OpenAI
+   - ChatGLM
+   - Ollama
+
 ## 示例交互
 
 该示例演示了三种场景：
@@ -156,4 +169,3 @@ SwarmResponse response = swarm.run(
    - 使用清晰、描述性的名称
    - 验证所有输入
    - 返回有意义的响应
-
