@@ -160,33 +160,6 @@ public class Swarm {
         }
     }
 
-    private ChatResponse handleError(Exception e, Agent agent, Map<String, Object> context) {
-        log.error("Handling error: {}", e.getMessage());
-
-        try {
-            errorHandler.saveState(context);
-            log.debug("Saved context state");
-
-            if (errorHandler.canRetry(e)) {
-                log.info("Attempting to retry operation");
-                return retryOperation(agent, context);
-            }
-            // else if (errorHandler.needsFallback(e)) {
-            // log.info("Switching to fallback agent");
-            // Agent fallbackAgent = errorHandler.getFallbackAgent();
-            // return fallbackAgent.execute(buildRequest(fallbackAgent, new ArrayList<>(),
-            // context, null), context);
-            // }
-            else {
-                log.error("Fatal error, restoring state");
-                errorHandler.restoreState(context);
-                throw new SwarmException("Fatal error occurred", e);
-            }
-        } catch (Exception ex) {
-            log.error("Error recovery failed: {}", ex.getMessage());
-            throw new SwarmException("Error recovery failed", ex);
-        }
-    }
 
     private ChatRequest buildRequest(Agent agent, List<Message> history, Map<String, Object> context,
             String modelOverride) {
@@ -266,36 +239,8 @@ public class Swarm {
             String modelOverride,
             boolean debug,
             int maxTurns) {
-        Map<String, Object> context = contextManager.initializeContext(contextVariables);
-        List<Message> history = new ArrayList<>();
-
-        // Add system prompt as first message
-        history.add(Message.builder()
-                .role("system")
-                .content(agent.getSystemPrompt(context))
-                .build());
-        history.addAll(messages);
-
-        List<Message> responseMessages = new ArrayList<>();
-
-        try (Stream<ChatResponse> stream = client.stream(
-                buildRequest(agent, history, context, modelOverride))) {
-
-            stream.forEach(response -> {
-                if (debug) {
-                    log.debug("Stream chunk: {}", response);
-                }
-
-                processStreamChunk(response, responseMessages, context);
-
-                // Check for tool calls in the chunk
-                if (hasToolCalls(response)) {
-                    Object result = handleToolCalls(response, agent, history, context);
-                }
-            });
-        }
-
-        return buildFinalResponse(history, agent, context);
+                // not implemented
+        return null;
     }
 
 
@@ -463,37 +408,6 @@ public class Swarm {
     }
 
     /**
-     * Process a streaming chunk
-     */
-    private void processStreamChunk(
-            ChatResponse chunk,
-            List<Message> responseMessages,
-            Map<String, Object> context) {
-        if (chunk.getChoices() != null && !chunk.getChoices().isEmpty()) {
-            Message message = chunk.getChoices().get(0).getMessage();
-            if (message != null) {
-                responseMessages.add(message);
-            }
-        }
-    }
-
-    /**
-     * Build final response
-     */
-    private ChatResponse buildFinalResponse(
-            List<Message> history,
-            Agent agent,
-            Map<String, Object> context) {
-        return ChatResponse.builder()
-                .choices(Collections.singletonList(
-                        Choice.builder()
-                                .message(history.get(history.size() - 1))
-                                .build()))
-                .rawJson(objectMapper.valueToTree(context))
-                .build();
-    }
-
-    /**
      * Context management inner class
      */
     private class ContextManager {
@@ -559,11 +473,12 @@ public class Swarm {
         }
 
         private void cleanSensitiveData(Map<String, Object> context) {
-            // Remove temporary and sensitive data
+            // Remove temporary and sensitive data if necessary
         }
 
         private void notifyContextUpdated(Map<String, Object> context) {
             // Notify any observers of context changes
+            // not implemented yet
         }
     }
 
