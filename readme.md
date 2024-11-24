@@ -73,6 +73,32 @@ For a complete example of how to use SwarmJava, check out our [Weather Agent Exa
 - Context management and state persistence
 - Integration with external services
 
+## Examples
+
+### Weather Agent Example
+
+The Weather Agent demonstrates how to create a simple agent that interacts with external APIs to provide weather information. It shows:
+- Basic agent implementation
+- External API integration
+- Function annotations and parameters
+
+See [Weather Example](examples/weather/README.md) for details.
+
+### Triage Agent Example
+
+The Triage Agent demonstrates how to implement a multi-agent system for customer service routing. It shows:
+- Multi-agent coordination
+- Dynamic agent switching
+- Context preservation across agents
+- Function-based routing
+
+The system includes:
+- **TriageAgent**: Routes requests to specialized agents
+- **SalesAgent**: Handles product inquiries
+- **RefundsAgent**: Processes refunds and discounts
+
+See [Triage Example](examples/triage/README.md) for implementation details.
+
 ## Configuration
 
 ### OpenAI
