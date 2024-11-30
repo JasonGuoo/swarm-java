@@ -99,19 +99,25 @@ public class Swarm {
                         history.add(responseMessage);
                         // Handle any tool calls
                         if (hasToolCalls(completion)) {
-                            Object result = handleToolCalls(completion, activeAgent, history, context);
-                            if (result instanceof Agent) {
-                                activeAgent = (Agent) result;
+                            List<Object> results = handleToolCalls(completion, activeAgent, history, context);
+                            ToolCall[] toolCalls = responseMessage.getToolCalls();
+                            
+                            // Process each result and add to history
+                            for (int i = 0; i < results.size(); i++) {
+                                Object result = results.get(i);
+                                if (result instanceof Agent) {
+                                    activeAgent = (Agent) result;
+                                }
+                                
+                                ToolCall toolCall = toolCalls[i];
+                                Message callMessage = Message.builder()
+                                        .role("tool")
+                                        .toolCallId(toolCall.getId())
+                                        .toolName(toolCall.getFunction().getName())
+                                        .content(result.toString())
+                                        .build();
+                                history.add(callMessage);
                             }
-                            // add function call to the history
-                            ToolCall toolCall = responseMessage.getToolCalls()[0];
-                            Message callMessage = Message.builder()
-                                    .role("tool")
-                                    .toolCallId(toolCall.getId())
-                                    .toolName(toolCall.getFunction().getName())
-                                    .content(result.toString())
-                                    .build();
-                            history.add(callMessage);
                         }
                     }
 
@@ -302,7 +308,7 @@ public class Swarm {
     /**
      * Handle tool calls in response
      */
-    private Object handleToolCalls(
+    private List<Object> handleToolCalls(
             ChatResponse response,
             Agent agent,
             List<Message> history,
@@ -311,7 +317,7 @@ public class Swarm {
         ToolCall[] toolCalls = message.getToolCalls();
 
         log.debug("Processing {} tool calls", toolCalls.length);
-        Object result = null;
+        List<Object> results = new ArrayList<>();
 
         for (ToolCall toolCall : toolCalls) {
             try {
@@ -370,8 +376,9 @@ public class Swarm {
                     args[i] = convertArgument(value, methodParam.getType());
                 }
 
-                // Invoke the function
-                result = method.invoke(agent, args);
+                // Invoke the function and store result
+                Object result = method.invoke(agent, args);
+                results.add(result);
 
             } catch (Exception e) {
                 log.error("Error executing tool call {}: {}",
@@ -379,7 +386,7 @@ public class Swarm {
                 throw new SwarmException("Tool call execution failed", e);
             }
         }
-        return result;
+        return results;
     }
 
     /**
